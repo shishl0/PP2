@@ -3,7 +3,7 @@ from pygame.locals import *
 
 pygame.init()
 
-# Setting up FPS
+# Game Setup and Global Variables
 FPS = 60
 FramePerSec = pygame.time.Clock()
 
@@ -21,23 +21,28 @@ SPEED = 5           # Base speed for enemy and coin movement
 SCORE = 0           # Score for dodged enemies
 coin_count = 0      # Counter for collected coins
 
-# Define constant sizes for the entities
+# Extra variables for coin-based speed increase
+COIN_THRESHOLD = 5              # Increase enemy speed for every 5 coins collected
+last_coin_speed_increase = 0    # Tracker for last coin count that triggered a speed increase
+
+# Constant sizes for game entities
 PLAYER_SIZE = (50, 100)   # Constant size for the Player sprite
 ENEMY_SIZE = (50, 100)    # Constant size for the Enemy sprite
-COIN_SIZE = (30, 30)     # Constant size for the Coin sprite
+COIN_SIZE = (30, 30)      # Constant size for the Coin sprite
 
 # Setting up Fonts
 font = pygame.font.SysFont("Verdana", 60)
 font_small = pygame.font.SysFont("Verdana", 20)
 game_over = font.render("Game Over", True, BLACK)
 
-# Load the background image
+# Load background image
 background = pygame.image.load("AnimatedStreet.png")
 
 # Create the game display window
 DISPLAYSURF = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 DISPLAYSURF.fill(WHITE)
 pygame.display.set_caption("Car Game")
+
 
 # ------------------------------
 # Define the Enemy sprite class
@@ -46,10 +51,10 @@ class Enemy(pygame.sprite.Sprite):
     def __init__(self):
         super().__init__() 
         self.image = pygame.image.load("Enemy.png")
-        # Scale the enemy image to a constant size
+        # Scale the enemy image to a constant size.
         self.image = pygame.transform.scale(self.image, ENEMY_SIZE)
         self.rect = self.image.get_rect()
-        # Start enemy at a random horizontal position at the top
+        # Start enemy at a random horizontal position at the top,
         self.rect.center = (
             random.randint(ENEMY_SIZE[0] // 2, SCREEN_WIDTH - ENEMY_SIZE[0] // 2),
             0
@@ -57,7 +62,7 @@ class Enemy(pygame.sprite.Sprite):
 
     def move(self):
         global SCORE
-        # Move enemy downward by SPEED pixels
+        # Move enemy downward by SPEED pixels.
         self.rect.move_ip(0, SPEED)
         # When the enemy moves off the bottom of the screen,
         # increment the score and reposition it at the top
@@ -76,7 +81,7 @@ class Player(pygame.sprite.Sprite):
     def __init__(self):
         super().__init__() 
         self.image = pygame.image.load("Player.png")
-        # Scale the player image to a constant size
+        # Scale the player image to a constant size.
         self.image = pygame.transform.scale(self.image, PLAYER_SIZE)
         self.rect = self.image.get_rect()
         self.rect.center = (160, 520)
@@ -92,25 +97,37 @@ class Player(pygame.sprite.Sprite):
                 self.rect.move_ip(5, 0)
 
 # ------------------------------
-# Define the Coin sprite class
+# Define the Coin sprite class with variable size based on reward
 # ------------------------------
 class Coin(pygame.sprite.Sprite):
     def __init__(self):
         super().__init__()
+        # Randomly assign a weight (reward) to the coin: 1, 2, or 3.
+        self.weight = random.choice([1, 2, 3])
+        
+        # Determine the size based on the coin's weight.
+        # Weight 1: base size, Weight 2: slightly larger, Weight 3: even larger.
+        if self.weight == 1:
+            self.size = (30, 30)    # Base size (for weight 1)
+        elif self.weight == 2:
+            self.size = (40, 40)    # Larger coin (for weight 2)
+        elif self.weight == 3:
+            self.size = (50, 50)    # Largest coin (for weight 3)
+        
         self.image = pygame.image.load("Coin.png")
-        # Scale the coin image to a constant size
-        self.image = pygame.transform.scale(self.image, COIN_SIZE)
+        # Scale the coin image to the determined size.
+        self.image = pygame.transform.scale(self.image, self.size)
         self.rect = self.image.get_rect()
         # Set the coin's starting position at a random horizontal position along the top
         self.rect.center = (
-            random.randint(COIN_SIZE[0] // 2, SCREEN_WIDTH - COIN_SIZE[0] // 2),
+            random.randint(self.size[0] // 2, SCREEN_WIDTH - self.size[0] // 2),
             0
         )
         
     def move(self):
-        # Move coin downward by SPEED pixels
+        # Move coin downward by SPEED pixels.
         self.rect.move_ip(0, SPEED)
-        # Remove the coin if it moves off the bottom of the screen
+        # Remove the coin if it moves off the bottom of the screen.
         if self.rect.top > SCREEN_HEIGHT:
             self.kill()
 
@@ -135,9 +152,9 @@ all_sprites.add(E1)
 INC_SPEED = pygame.USEREVENT + 0.5
 pygame.time.set_timer(INC_SPEED, 1000)
 
-# ------------------------------
+# -------------------------------------------------
 # Main Game Loop
-# ------------------------------
+# -------------------------------------------------
 while True:
     # Process events
     for event in pygame.event.get():
@@ -170,12 +187,21 @@ while True:
         DISPLAYSURF.blit(entity.image, entity.rect)
         entity.move()
     
+    # -------------------------------------------------
     # Check for collisions between the player and coins
+    # Each coin adds its weight to the coin_count
+    # -------------------------------------------------
     coins_collected = pygame.sprite.spritecollide(P1, coins, True)
     if coins_collected:
-        coin_count += len(coins_collected)
+        for coin in coins_collected:
+            coin_count += coin.weight
+        
+        # Increase enemy speed when additional coins have been earned.
+        if coin_count - last_coin_speed_increase >= COIN_THRESHOLD:
+            SPEED += 1  # Increase enemy speed.
+            last_coin_speed_increase = coin_count  # Update threshold tracker.
     
-    # Check for collision between the player and any enemy
+    # Check for collision between the player and any enemy.
     if pygame.sprite.spritecollideany(P1, enemies):
         pygame.mixer.Sound('crash.wav').play()
         time.sleep(0.5)
