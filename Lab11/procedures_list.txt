@@ -1,0 +1,65 @@
+-- 1️ Function: Get records by pattern (name, phone)
+CREATE OR REPLACE FUNCTION search_records(pattern TEXT)
+RETURNS TABLE(id INT, name VARCHAR, phone VARCHAR) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT phonebook.id, phonebook.name, phonebook.phone 
+    FROM phonebook 
+    WHERE phonebook.name ILIKE '%' || search_records.pattern || '%'
+       OR phonebook.phone ILIKE '%' || search_records.pattern || '%';
+END;
+$$ LANGUAGE plpgsql;
+
+-- 2️ Procedure: Insert or Update a User
+CREATE OR REPLACE PROCEDURE insert_or_update_user(username VARCHAR, phone_number VARCHAR)
+LANGUAGE plpgsql AS $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM phonebook WHERE name = username) THEN
+        UPDATE phonebook SET phone = phone_number WHERE name = username;
+    ELSE
+        INSERT INTO phonebook (name, phone) VALUES (username, phone_number);
+    END IF;
+END;
+$$;
+
+-- 3️ Procedure: Bulk Insert Users with Phone Validation
+CREATE OR REPLACE PROCEDURE insert_bulk_users(user_list TEXT[][])
+LANGUAGE plpgsql AS $$
+DECLARE
+    i INT;
+    name TEXT;
+    phone TEXT;
+    invalid_entries TEXT[] := '{}';
+BEGIN
+    FOR i IN 1 .. array_length(user_list, 1) LOOP
+        name := user_list[i][1];
+        phone := user_list[i][2];
+
+        -- Validate phone: Only digits allowed
+        IF phone ~ '^\d+$' THEN
+            CALL insert_or_update_user(name, phone);
+        ELSE
+            invalid_entries := array_append(invalid_entries, name || ' (' || phone || ')');
+        END IF;
+    END LOOP;
+
+    -- Return invalid entries
+    RAISE NOTICE 'Invalid records: %', invalid_entries;
+END;
+$$;
+
+-- 4️ Function: Paginated Querying
+CREATE OR REPLACE FUNCTION get_paginated_data(limit_value INT, offset_value INT)
+RETURNS TABLE(id INT, name VARCHAR, phone VARCHAR) AS $$
+BEGIN
+    RETURN QUERY SELECT * FROM phonebook ORDER BY id LIMIT limit_value OFFSET offset_value;
+END;
+$$ LANGUAGE plpgsql;
+
+-- 5️ Procedure: Delete User by Name or Phone
+CREATE OR REPLACE PROCEDURE delete_user(identifier TEXT)
+LANGUAGE plpgsql AS $$
+BEGIN
+    DELETE FROM phonebook WHERE name = identifier OR phone = identifier;
+END;
+$$;
